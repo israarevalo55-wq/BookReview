@@ -84,10 +84,22 @@ mapear `author_name`, `cover_i`, etc.). Ni domain ni ui saben que estos DTOs
 existen.
 
 ### `data/repository/`
-Las únicas clases que conocen dos mundos a la vez: dominio y
-Room/DataStore/Retrofit. Traducen (`ResenaEntity ↔ Resena`,
-`LibroDto → Libro`) y son el punto exacto donde se reemplazó el mock de la
-Semana 1 por la llamada real a Open Library, sin que nadie más se entere.
+Cada implementación conoce dos mundos, pero siempre **el mismo par**: su
+propia parte de dominio y su propia fuente de datos. `LibroRepositoryImpl`
+conoce `Libro` (dominio) y `OpenLibraryApi`/`LibroDto` (remoto) — nunca
+Room. `ResenaRepositoryImpl` conoce `Resena` (dominio) y `ResenaDao`
+(local) — nunca Retrofit. Ninguno de los dos sabe que el otro existe. Esa
+separación es la que obliga a que la combinación entre ambos (Semana 3)
+tenga que vivir en otra capa.
+
+### `domain/usecase/` (desde la Semana 3)
+Acá es donde de verdad se **combinan** datos remotos y locales — nunca en
+un Repository (que representa una sola fuente) ni en el ViewModel
+(que no debe conocer dos repositorios para un mismo propósito). Cada caso
+de uso recibe `LibroRepository` + `ResenaRepository` por constructor y
+expone un solo `operator fun invoke(...)`, así se usan como una función:
+`obtenerLibroConResenaUseCase(libroId)`. Ver la sección "Cómo quedó la
+combinación" más abajo.
 
 ### `ui/`
 Composables + ViewModels (`StateFlow<UiState>`). Cada ViewModel recibe su
@@ -108,6 +120,69 @@ DetalleScreen (ui)
               → MisResenasScreen, que colecciona el Flow de esa tabla,
                 se actualiza sola
 ```
+
+## Cómo quedó la combinación Room + Retrofit (Semana 3)
+
+Antes de esta semana, `DetalleViewModel` llamaba a `libroRepository` y a
+`resenaRepository` **por separado** y armaba el `UiState` con los dos
+resultados — la combinación pasaba dentro del ViewModel. Eso funcionaba,
+pero no era "patrón Repositorio con Clean Architecture": un ViewModel
+mezclando dos fuentes de datos por su cuenta es lógica de negocio viviendo
+en la capa de presentación.
+
+**Regla que se aplicó:** un Repository representa **una sola fuente**
+(Room *o* Retrofit, nunca las dos). Combinar información de más de una
+fuente es trabajo de un **caso de uso**, en `domain/usecase/`, que sí puede
+depender de dos repositorios a la vez porque su única responsabilidad es
+orquestarlos.
+
+### Caso 1 — Detalle: `ObtenerLibroConResenaUseCase`
+
+```
+DetalleViewModel.cargar()
+  → obtenerLibroConResenaUseCase(libroId)          [domain/usecase]
+      → libroRepository.getLibroPorId(libroId)     [remoto: caché de la última búsqueda a Open Library]
+      → resenaRepository.getResenaPorLibroId(libroId) [local: Room]
+      → arma LibroConResena(libro, resena)          [domain/model]
+  ← DetalleViewModel solo desempaqueta LibroConResena en su UiState
+    (rating/texto/esFavorito = los de resena si existe, si no, valores vacíos)
+```
+
+`DetalleViewModel` ya **no recibe `LibroRepository`** en su constructor —
+solo recibe el caso de uso (para leer) y `ResenaRepository` (para guardar,
+que es una escritura simple a una sola fuente, no una combinación).
+
+### Caso 2 — Búsqueda: `BuscarLibrosConFavoritosUseCase`
+
+```
+BusquedaViewModel.buscar()
+  → buscarLibrosConFavoritosUseCase(query)          [domain/usecase]
+      → libroRepository.buscarLibros(query)         [remoto: Open Library, N resultados]
+      → resenaRepository.getFavoritos().first()     [local: Room, solo esFavorito=true]
+      → cruza por libroId: List<Libro>.map { it.copy(esFavorito = it.id in idsFavoritos) }
+  ← BusquedaViewModel recibe la lista de Libro ya con esFavorito correcto
+```
+
+`BusquedaScreen` solo lee `libro.esFavorito` y pinta un ícono de corazón —
+no sabe (ni le importa) que ese booleano salió de cruzar dos fuentes.
+
+### Por qué `Libro.esFavorito` es un campo "derivado"
+
+Se agregó `esFavorito: Boolean = false` al modelo de dominio `Libro`, pero
+**ni la API ni `LibroRepositoryImpl` lo llenan nunca** — el JSON de Open
+Library no tiene ese concepto. Siempre nace en `false` y solo
+`BuscarLibrosConFavoritosUseCase` lo pone en `true`, después de consultar
+Room. Es importante poder explicar esta diferencia: hay campos que vienen
+de una sola fuente (`titulo`, `autor`, de la API) y campos que existen
+*porque* se combinaron dos fuentes (`esFavorito`, calculado).
+
+### Lo que NO cambió (y por qué es la prueba de que el patrón funciona)
+
+`LibroRepository`, `ResenaRepository`, `LibroRepositoryImpl` y
+`ResenaRepositoryImpl` no se tocaron para nada esta semana. Solo se agregó
+una capa nueva encima. Eso es exactamente lo que se espera de una buena
+separación en capas: agregar un comportamiento nuevo (combinar fuentes) sin
+modificar el código que ya funcionaba.
 
 ## Decisiones y por qué (para defender en la sustentación)
 
@@ -137,6 +212,12 @@ DetalleScreen (ui)
 - **`fotoUri` nullable, siempre `null` por ahora**: el campo ya existe en
   `Resena`/`ResenaEntity` para cuando se agregue la cámara con permisos en
   runtime.
+- **Casos de uso (`domain/usecase/`) en vez de que un Repository dependa de
+  otro**: se pudo haber hecho que `LibroRepositoryImpl` recibiera también
+  `ResenaDao` y cruzara ahí mismo, pero eso mezclaría sus responsabilidades
+  (uno pasaría a conocer Room *y* Retrofit) y sería más difícil de probar
+  por separado. Un caso de uso que depende de dos interfaces de repositorio
+  es el lugar correcto para orquestar, según Clean Architecture.
 
 ## Problema de build resuelto (Semana 1)
 
@@ -193,6 +274,10 @@ resultado sin errores.
 - [x] **Semana 2** — `data/remote/OpenLibraryApi.kt` + DTOs; `LibroRepositoryImpl`
       llama a Open Library en vez de devolver la lista mock. Probado en
       emulador, no solo compilado.
+- [x] **Semana 3** — `domain/usecase/` combina Room + Retrofit (Detalle
+      precarga la reseña guardada, Búsqueda marca favoritos). ViewModels ya
+      no reciben `LibroRepository` directo. Probado en emulador: reseña
+      favorita guardada en Detalle → corazón visible en Búsqueda.
 - [ ] **Próxima** (sin fecha aún) — estados visuales de carga/error
       (Semana 5 según el cronograma original), cámara con permisos en
       runtime y guardar `fotoUri` real en `Resena`.
