@@ -2,7 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Necesario para cargar portadas con Coil (mock de esta semana) y,
+         la próxima semana, para las llamadas Retrofit a Open Library. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
+        android:name=".BookReviewApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
