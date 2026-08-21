@@ -1,0 +1,72 @@
+<svg width="680" height="720" viewBox="0 0 680 720" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Arquitectura en capas de BookReview</title>
+<desc>Diagrama estructural con tres capas: UI (Búsqueda, Detalle, Mis Reseñas, Ajustes), Dominio (Modelos, Casos de uso, Repositorios como interfaces) y Data (Room, DataStore, Retrofit), con flechas mostrando que UI usa Dominio y Data implementa Dominio.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#3d3d3a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<rect width="680" height="720" fill="#ffffff"/>
+
+<rect x="40" y="40" width="600" height="150" rx="16" fill="none" stroke="#73726c" stroke-width="0.5"/>
+<text x="60" y="68" font-family="sans-serif" font-size="14" font-weight="500" fill="#1a1a18">Interfaz (ui/)</text>
+
+<g>
+<rect x="60" y="104" width="130" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="125" y="126" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#04342C">Búsqueda</text>
+</g>
+<g>
+<rect x="200" y="104" width="130" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="265" y="126" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#04342C">Detalle</text>
+</g>
+<g>
+<rect x="340" y="104" width="130" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="405" y="126" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#04342C">Mis Reseñas</text>
+</g>
+<g>
+<rect x="480" y="104" width="130" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="545" y="126" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#04342C">Ajustes</text>
+</g>
+
+<line x1="340" y1="190" x2="340" y2="248" stroke="#3d3d3a" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="360" y="223" font-family="sans-serif" font-size="12" fill="#5f5e5a">usa (nunca Room/Retrofit)</text>
+
+<rect x="40" y="250" width="600" height="190" rx="16" fill="none" stroke="#73726c" stroke-width="0.5"/>
+<text x="60" y="278" font-family="sans-serif" font-size="14" font-weight="500" fill="#1a1a18">Dominio (domain/)</text>
+
+<g>
+<rect x="60" y="314" width="170" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="145" y="332" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#26215C">Modelos</text>
+<text x="145" y="352" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="12" fill="#3C3489">Libro, Resena</text>
+</g>
+<g>
+<rect x="250" y="314" width="170" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="335" y="332" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#26215C">Casos de uso</text>
+<text x="335" y="352" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="12" fill="#3C3489">Combinan fuentes</text>
+</g>
+<g>
+<rect x="440" y="314" width="170" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="525" y="332" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#26215C">Repositorios</text>
+<text x="525" y="352" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="12" fill="#3C3489">Solo interfaces</text>
+</g>
+
+<line x1="340" y1="500" x2="340" y2="442" stroke="#3d3d3a" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="360" y="473" font-family="sans-serif" font-size="12" fill="#5f5e5a">implementa (Room/DataStore/Retrofit)</text>
+
+<rect x="40" y="500" width="600" height="190" rx="16" fill="none" stroke="#73726c" stroke-width="0.5"/>
+<text x="60" y="528" font-family="sans-serif" font-size="14" font-weight="500" fill="#1a1a18">Data (data/)</text>
+
+<g>
+<rect x="60" y="564" width="170" height="56" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text x="145" y="582" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#4A1B0C">Room</text>
+<text x="145" y="602" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="12" fill="#712B13">Reseñas (SQLite)</text>
+</g>
+<g>
+<rect x="250" y="564" width="170" height="56" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text x="335" y="582" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#4A1B0C">DataStore</text>
+<text x="335" y="602" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="12" fill="#712B13">Modo oscuro</text>
+</g>
+<g>
+<rect x="440" y="564" width="170" height="56" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text x="525" y="582" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="14" font-weight="500" fill="#4A1B0C">Retrofit</text>
+<text x="525" y="602" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="12" fill="#712B13">Open Library API</text>
+</g>
+</svg>
