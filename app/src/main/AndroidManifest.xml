@@ -2,9 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Necesario para cargar portadas con Coil (mock de esta semana) y,
-         la próxima semana, para las llamadas Retrofit a Open Library. -->
+    <!-- Necesario para cargar portadas con Coil y para las llamadas
+         Retrofit a Open Library. -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Semana 4: para tomar la foto de una reseña con la cámara del
+         dispositivo. Se pide en runtime desde DetalleScreen, no basta con
+         declararlo acá (ver ActivityResultContracts.RequestPermission). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- required="false": la app funciona igual en un dispositivo sin
+         cámara (Chromebooks, tablets viejas, etc.); simplemente el botón
+         "Tomar foto" no tendrá con qué abrir una cámara. Si esto fuera
+         "true", Play Store ni siquiera dejaría instalar la app en esos
+         dispositivos. -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <application
         android:name=".BookReviewApplication"
@@ -27,6 +41,23 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Semana 4: le da a la app de cámara (otra app, vía intent
+             implícito ACTION_IMAGE_CAPTURE) un content:// Uri temporal y
+             seguro donde escribir la foto, en vez de exponerle una ruta de
+             archivo real (file://), que Android bloquea desde la API 24
+             (FileUriExposedException). exported="false": ningún otro app
+             puede usar este provider directamente, solo recibe el Uri que
+             nosotros le entregamos explícitamente al lanzar la cámara. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

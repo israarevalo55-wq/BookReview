@@ -55,6 +55,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
+    // Semana 4: PhotoCamera no está en el set "core" de íconos, solo en
+    // el extendido (miles de íconos, por eso Compose lo separó en otro
+    // artefacto). Usa la misma versión que material3 vía el BOM.
+    implementation(libs.androidx.compose.material.icons.extended)
 
     // Navigation Compose: navegación entre Búsqueda / Detalle / Mis Reseñas / Ajustes
     implementation(libs.androidx.navigation.compose)

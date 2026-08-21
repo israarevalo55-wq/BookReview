@@ -20,6 +20,7 @@ data class DetalleUiState(
     val rating: Float = 0f,
     val texto: String = "",
     val esFavorito: Boolean = false,
+    val fotoUri: String? = null,
     val guardando: Boolean = false,
     val yaTieneResena: Boolean = false
 )
@@ -58,6 +59,7 @@ class DetalleViewModel(
                     rating = resenaExistente?.rating ?: 0f,
                     texto = resenaExistente?.texto ?: "",
                     esFavorito = resenaExistente?.esFavorito ?: false,
+                    fotoUri = resenaExistente?.fotoUri,
                     yaTieneResena = resenaExistente != null
                 )
             }
@@ -73,6 +75,12 @@ class DetalleViewModel(
     fun onToggleFavorito() =
         _uiState.update { it.copy(esFavorito = !it.esFavorito) }
 
+    // La pantalla es quien pidió el permiso y manejó la cámara (Semana 4);
+    // acá solo llega el resultado final, como String. El ViewModel nunca
+    // supo que existió un permiso, un FileProvider o un Intent de cámara.
+    fun onFotoCapturada(uri: String) =
+        _uiState.update { it.copy(fotoUri = uri) }
+
     fun guardarResena() {
         val estado = _uiState.value
         val libro = estado.libro ?: return
@@ -85,7 +93,7 @@ class DetalleViewModel(
                     autor = libro.autor,
                     rating = estado.rating,
                     texto = estado.texto,
-                    fotoUri = null, // se completa cuando agreguemos la cámara
+                    fotoUri = estado.fotoUri,
                     esFavorito = estado.esFavorito
                 )
             )

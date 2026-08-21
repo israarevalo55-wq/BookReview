@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    files-path apunta a context.filesDir (almacenamiento interno privado,
+    NO context.cacheDir): el sistema puede borrar cacheDir cuando anda
+    corto de espacio, y esta foto tiene que sobrevivir tanto como la
+    reseña que la referencia en Room, no solo mientras dure la captura.
+-->
+<paths>
+    <files-path name="fotos_resenas" path="fotos/" />
+</paths>

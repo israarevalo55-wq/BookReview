@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
@@ -26,8 +28,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
 import com.example.bookreview.domain.model.Resena
 import com.example.bookreview.ui.AppViewModelProvider
 
@@ -77,6 +82,20 @@ private fun ResenaItem(
 ) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Miniatura de la foto guardada, si existe (fotoUri sigue
+            // siendo null en cualquier reseña creada antes de la Semana 4,
+            // así que esto es opcional a propósito).
+            resena.fotoUri?.let { fotoUri ->
+                AsyncImage(
+                    model = fotoUri,
+                    contentDescription = "Foto de la reseña de ${resena.titulo}",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .padding(end = 12.dp)
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(resena.titulo, style = MaterialTheme.typography.titleMedium)
                 Text(resena.autor, style = MaterialTheme.typography.bodyMedium)

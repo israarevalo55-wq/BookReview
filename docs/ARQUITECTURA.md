@@ -57,7 +57,7 @@ app/src/main/java/com/example/bookreview/
     │   ├── Screen.kt                Rutas (sealed class)
     │   └── BookReviewNavGraph.kt    NavHost + barra inferior
     ├── search/    (Búsqueda)        BusquedaScreen.kt, BusquedaViewModel.kt
-    ├── detail/    (Detalle)         DetalleScreen.kt, DetalleViewModel.kt
+    ├── detail/    (Detalle)         DetalleScreen.kt, DetalleViewModel.kt, CapturaFotoUtils.kt
     ├── reviews/   (Mis Reseñas)     MisResenasScreen.kt, MisResenasViewModel.kt
     ├── settings/  (Ajustes)         AjustesScreen.kt, AjustesViewModel.kt
     └── theme/                       Color.kt, Theme.kt, Type.kt (sin cambios)
@@ -267,6 +267,93 @@ confirmaron en logcat las llamadas reales
 vieron portadas reales cargando con Coil, y se entró a Detalle desde un
 resultado sin errores.
 
+## Cámara y permisos en runtime (Semana 4)
+
+### El flujo, capa por capa
+
+`DetalleScreen` (ui) es la única que sabe que existe una cámara o un
+permiso. `DetalleViewModel` solo recibe el resultado final:
+
+```
+DetalleScreen: botón "Tomar foto"
+  → ContextCompat.checkSelfPermission(CAMERA)
+      ¿ya concedido? → lanzarCamara()
+      ¿no?           → lanzadorPermiso.launch(CAMERA)
+                          ¿concedido? → lanzarCamara()
+                          ¿denegado?  → Snackbar (no bloquea nada más)
+
+lanzarCamara():
+  → crearUriParaNuevaFoto(context)     [ui/detail/CapturaFotoUtils.kt]
+      → File(context.filesDir, "fotos/resena_<timestamp>.jpg")
+      → FileProvider.getUriForFile(...)  → content:// Uri (nunca file://)
+  → lanzadorCamara.launch(uri)          [ActivityResultContracts.TakePicture()]
+      ¿éxito? → viewModel.onFotoCapturada(uri.toString())
+      ¿no?    → no pasa nada, el formulario sigue como estaba
+
+DetalleViewModel.onFotoCapturada(uri: String)
+  → _uiState.update { it.copy(fotoUri = uri) }   // eso es TODO lo que sabe
+
+DetalleViewModel.guardarResena()
+  → Resena(..., fotoUri = estado.fotoUri, ...)
+    → ResenaRepository.guardarResena()  (mismo flujo que ya existía)
+```
+
+`ResenaRepository`, `ResenaRepositoryImpl`, `ResenaEntity` **no cambiaron**:
+`fotoUri` ya existía desde la Semana 1 como `String?`. Solo dejó de ser
+siempre `null`.
+
+### FileProvider, sin exponer rutas de archivo
+
+`AndroidManifest.xml` declara un `<provider>` (`androidx.core.content.FileProvider`,
+`exported="false"`) apuntando a `res/xml/file_paths.xml`, que expone
+`context.filesDir/fotos/` (no `cacheDir`: el sistema puede borrar el caché
+bajo presión de espacio, y la foto tiene que sobrevivir tanto como la
+reseña que la referencia en Room). `crearUriParaNuevaFoto()` crea el
+archivo y pide su Uri al FileProvider — la app de cámara (otro proceso)
+recibe un `content://...` que puede escribir sin que nosotros le demos
+una ruta `file://` real (Android lo bloquea entre apps desde la API 24 con
+`FileUriExposedException`).
+
+### Dos bugs reales encontrados probando en el emulador
+
+Elegir **"Only this time"** en el diálogo de permiso hace que Android
+**mate el proceso de la app** al pasar a segundo plano (revoca el permiso
+one-time; confirmado en logcat: `Killing ...: one-time permission revoked`).
+Volver de la cámara con el proceso recreado expuso dos pérdidas de estado:
+
+1. **La Uri pendiente se perdía.** `uriFotoPendiente` vivía en `remember`
+   (Compose), que no sobrevive la muerte del proceso. Sin ella, el
+   callback de éxito de `TakePicture()` no sabía a qué archivo
+   correspondía la foto. **Fix:** `rememberSaveable` (`Uri` es
+   `Parcelable`, no requiere un `Saver` manual).
+
+2. **La caché en memoria de `LibroRepositoryImpl` (la limitación anotada
+   desde la Semana 2) quedaba vacía**, y `ObtenerLibroConResenaUseCase`
+   devolvía `null` completo — perdiendo el acceso a la reseña ya guardada
+   en Room, que sí es persistente. **Fix:** el caso de uso ahora solo
+   devuelve `null` si NI el libro remoto NI la reseña local existen; si
+   el libro remoto no está pero la reseña sí, reconstruye un `Libro`
+   mínimo con `resena.titulo`/`resena.autor` (campos que `Resena` ya
+   guarda duplicados, justo para este caso).
+
+> Lección para la sustentación, la misma de la Semana 2 pero con un
+> ejemplo más contundente: lanzar cualquier Activity externa (cámara,
+> selector de archivos, etc.) es un punto donde Android puede matar tu
+> proceso sin avisar. El estado que depende de sobrevivir eso tiene que
+> vivir en `rememberSaveable`/`SavedStateHandle`, nunca en `remember`
+> a secas ni en una caché puramente en memoria.
+
+**Verificado en vivo, repitiendo el escenario con y sin el fix:** sin el
+fix, volver de la cámara con el proceso recreado mostraba Detalle vacío
+(sin título, sin rating, sin foto) — sin crash, pero con pérdida de datos.
+Con el fix, el mismo escenario forzado dos veces (`pm revoke` +
+`pm grant`/"Only this time") conserva todo: libro, reseña existente y la
+foto recién tomada. Permiso denegado → Snackbar
+("Sin permiso de cámara no se puede adjuntar una foto. Puedes seguir
+escribiendo tu reseña con normalidad."), sin crash, resto del formulario
+usable. Miniatura en Mis Reseñas confirmada visualmente, solo en la
+reseña que tiene foto.
+
 ## Estado por semana
 
 - [x] **Semana 1** — estructura de capas, Room + DataStore reales, 4
@@ -278,6 +365,9 @@ resultado sin errores.
       precarga la reseña guardada, Búsqueda marca favoritos). ViewModels ya
       no reciben `LibroRepository` directo. Probado en emulador: reseña
       favorita guardada en Detalle → corazón visible en Búsqueda.
+- [x] **Semana 4** — cámara + permiso runtime (`RequestPermission` +
+      `TakePicture`), `FileProvider`, preview en Detalle y miniatura en
+      Mis Reseñas. Se encontraron y corrigieron dos bugs reales de
+      pérdida de estado por muerte de proceso (permiso "solo esta vez").
 - [ ] **Próxima** (sin fecha aún) — estados visuales de carga/error
-      (Semana 5 según el cronograma original), cámara con permisos en
-      runtime y guardar `fotoUri` real en `Resena`.
+      (Semana 5 según el cronograma original).
