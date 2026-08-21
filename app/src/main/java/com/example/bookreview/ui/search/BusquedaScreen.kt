@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.example.bookreview.domain.model.Libro
@@ -70,7 +72,10 @@ fun BusquedaScreen(
                 uiState.cargando -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-                uiState.yaBusco && uiState.resultados.isEmpty() -> {
+                !uiState.yaBusco -> {
+                    Text("Escribe un título o autor y toca la lupa para buscar")
+                }
+                uiState.resultados.isEmpty() -> {
                     Text("Sin resultados para \"${uiState.query}\"")
                 }
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -93,12 +98,22 @@ private fun LibroItem(libro: Libro, onClick: () -> Unit) {
                 modifier = Modifier.size(56.dp, 84.dp)
             )
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(libro.titulo, style = MaterialTheme.typography.titleMedium)
                 Text(libro.autor, style = MaterialTheme.typography.bodyMedium)
                 libro.anioPublicacion?.let {
                     Text(it.toString(), style = MaterialTheme.typography.bodySmall)
                 }
+            }
+            // libro.esFavorito lo llena BuscarLibrosConFavoritosUseCase
+            // cruzando este resultado de la API con las reseñas guardadas
+            // en Room; LibroRepositoryImpl/la API nunca lo tocan.
+            if (libro.esFavorito) {
+                Icon(
+                    Icons.Default.Favorite,
+                    contentDescription = "Ya tiene reseña guardada como favorito",
+                    tint = Color(0xFFE53935)
+                )
             }
         }
     }

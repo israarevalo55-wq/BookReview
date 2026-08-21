@@ -24,13 +24,13 @@ import com.example.bookreview.ui.settings.AjustesViewModel
 object AppViewModelProvider {
     val Factory = viewModelFactory {
         initializer {
-            BusquedaViewModel(bookReviewApplication().container.libroRepository)
+            BusquedaViewModel(bookReviewApplication().container.buscarLibrosConFavoritosUseCase)
         }
         initializer {
             DetalleViewModel(
                 savedStateHandle = createSavedStateHandle(),
-                libroRepository = bookReviewApplication().container.libroRepository,
-                resenaRepository = bookReviewApplication().container.resenaRepository
+                resenaRepository = bookReviewApplication().container.resenaRepository,
+                obtenerLibroConResenaUseCase = bookReviewApplication().container.obtenerLibroConResenaUseCase
             )
         }
         initializer {

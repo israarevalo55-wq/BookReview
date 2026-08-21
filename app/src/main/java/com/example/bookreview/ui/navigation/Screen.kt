@@ -1,5 +1,7 @@
 package com.example.bookreview.ui.navigation
 
+import android.net.Uri
+
 /** Nombre del argumento de ruta que recibe la pantalla de Detalle. */
 const val ARG_LIBRO_ID = "libroId"
 
@@ -14,6 +16,11 @@ sealed class Screen(val route: String) {
     data object Ajustes : Screen("ajustes")
 
     data object Detalle : Screen("detalle/{$ARG_LIBRO_ID}") {
-        fun createRoute(libroId: String) = "detalle/$libroId"
+        // El "key" de Open Library viene con barras, p.ej. "/works/OL27448W".
+        // Sin codificar, "detalle/$libroId" quedaría "detalle//works/OL27448W"
+        // (doble barra) y Navigation Compose no lo matchea contra
+        // "detalle/{libroId}" -> crash. Uri.encode lo deja como un solo
+        // segmento seguro (p.ej. "%2Fworks%2FOL27448W").
+        fun createRoute(libroId: String) = "detalle/${Uri.encode(libroId)}"
     }
 }

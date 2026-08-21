@@ -1,40 +1,48 @@
 package com.example.bookreview.data.repository
 
+import com.example.bookreview.data.remote.LibroDto
+import com.example.bookreview.data.remote.OpenLibraryApi
 import com.example.bookreview.domain.model.Libro
 import com.example.bookreview.domain.repository.LibroRepository
-import kotlinx.coroutines.delay
+
+private const val TAMANO_PORTADA = "M" // S / M / L, ver covers.openlibrary.org
 
 /**
- * Implementación MOCK de LibroRepository para esta semana.
- *
- * La próxima semana esta clase pasará a recibir un OpenLibraryApi (Retrofit)
- * por constructor y a mapear la respuesta JSON de
- * https://openlibrary.org/search.json a [Libro]. La interfaz
- * [LibroRepository] no cambia, así que BusquedaViewModel y DetalleViewModel
- * no se tocan: es el punto exacto de la app donde se conecta la API real.
+ * Implementación real de LibroRepository: llama a Open Library vía Retrofit
+ * y mapea LibroDto -> Libro (dominio). La interfaz LibroRepository no
+ * cambió, así que BusquedaViewModel y DetalleViewModel siguen exactamente
+ * igual que la Semana 1.
  */
-class LibroRepositoryImpl : LibroRepository {
+class LibroRepositoryImpl(
+    private val api: OpenLibraryApi
+) : LibroRepository {
+
+    // Open Library no tiene un endpoint "obtener por key" en el mismo
+    // formato que /search.json, así que cacheamos en memoria los últimos
+    // resultados buscados y getLibroPorId() resuelve desde ahí (por ejemplo,
+    // al entrar a Detalle tocando un resultado de Búsqueda). Simplificación
+    // a propósito para esta semana: si la app se reinicia y se entra a
+    // Detalle directo desde Mis Reseñas, uiState.libro queda en null y la
+    // pantalla solo muestra el formulario de reseña, sin la portada/autor.
+    // Se puede resolver más adelante agregando un endpoint de detalle
+    // (openlibrary.org/{key}.json) cuando toquemos estados de carga/error
+    // en la Semana 5.
+    private val cache = mutableMapOf<String, Libro>()
 
     override suspend fun buscarLibros(query: String): List<Libro> {
-        delay(400) // simula latencia de red para poder probar el estado "cargando"
-        if (query.isBlank()) return librosMock
-        return librosMock.filter {
-            it.titulo.contains(query, ignoreCase = true) ||
-                it.autor.contains(query, ignoreCase = true)
-        }
+        if (query.isBlank()) return emptyList()
+        val libros = api.buscarLibros(query).docs.map { it.toDomain() }
+        libros.forEach { cache[it.id] = it }
+        return libros
     }
 
-    override suspend fun getLibroPorId(id: String): Libro? =
-        librosMock.find { it.id == id }
-
-    companion object {
-        private val librosMock = listOf(
-            Libro("ol1", "Cien años de soledad", "Gabriel García Márquez", 1967, "https://picsum.photos/seed/ol1/300/450"),
-            Libro("ol2", "1984", "George Orwell", 1949, "https://picsum.photos/seed/ol2/300/450"),
-            Libro("ol3", "El nombre del viento", "Patrick Rothfuss", 2007, "https://picsum.photos/seed/ol3/300/450"),
-            Libro("ol4", "Fahrenheit 451", "Ray Bradbury", 1953, "https://picsum.photos/seed/ol4/300/450"),
-            Libro("ol5", "Sapiens", "Yuval Noah Harari", 2011, "https://picsum.photos/seed/ol5/300/450"),
-            Libro("ol6", "El hobbit", "J. R. R. Tolkien", 1937, "https://picsum.photos/seed/ol6/300/450")
-        )
-    }
+    override suspend fun getLibroPorId(id: String): Libro? = cache[id]
 }
+
+private fun LibroDto.toDomain() = Libro(
+    id = key,
+    titulo = title ?: "Título desconocido",
+    autor = authorName?.joinToString(", ") ?: "Autor desconocido",
+    anioPublicacion = firstPublishYear,
+    portadaUrl = coverId?.let { "https://covers.openlibrary.org/b/id/$it-$TAMANO_PORTADA.jpg" }
+)

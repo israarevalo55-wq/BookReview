@@ -1,12 +1,13 @@
 package com.example.bookreview.ui.detail
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bookreview.domain.model.Libro
 import com.example.bookreview.domain.model.Resena
-import com.example.bookreview.domain.repository.LibroRepository
 import com.example.bookreview.domain.repository.ResenaRepository
+import com.example.bookreview.domain.usecase.ObtenerLibroConResenaUseCase
 import com.example.bookreview.ui.navigation.ARG_LIBRO_ID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,14 +26,17 @@ data class DetalleUiState(
 
 class DetalleViewModel(
     savedStateHandle: SavedStateHandle,
-    private val libroRepository: LibroRepository,
-    private val resenaRepository: ResenaRepository
+    private val resenaRepository: ResenaRepository,
+    private val obtenerLibroConResenaUseCase: ObtenerLibroConResenaUseCase
 ) : ViewModel() {
 
     // Navigation Compose entrega el argumento de ruta {libroId} a través de
     // SavedStateHandle: el ViewModel lo lee acá y así no depende de
-    // NavController ni de la pantalla que lo llamó.
-    private val libroId: String = checkNotNull(savedStateHandle[ARG_LIBRO_ID])
+    // NavController ni de la pantalla que lo llamó. Se decodifica porque
+    // Screen.Detalle.createRoute() lo codificó con Uri.encode (el "key" de
+    // Open Library trae barras, p.ej. "/works/OL27448W"). Si Navigation ya
+    // lo entregó decodificado, Uri.decode sobre texto sin "%" es un no-op.
+    private val libroId: String = Uri.decode(checkNotNull(savedStateHandle[ARG_LIBRO_ID]))
 
     private val _uiState = MutableStateFlow(DetalleUiState())
     val uiState: StateFlow<DetalleUiState> = _uiState.asStateFlow()
@@ -43,11 +47,14 @@ class DetalleViewModel(
 
     private fun cargar() {
         viewModelScope.launch {
-            val libro = libroRepository.getLibroPorId(libroId)
-            val resenaExistente = resenaRepository.getResenaPorLibroId(libroId)
+            // Un solo llamado: el caso de uso es quien fue a buscar el libro
+            // (remoto) y la reseña existente (local, Room) y las combinó.
+            // El ViewModel solo desempaqueta el resultado hacia el UiState.
+            val libroConResena = obtenerLibroConResenaUseCase(libroId)
+            val resenaExistente = libroConResena?.resena
             _uiState.update {
                 it.copy(
-                    libro = libro,
+                    libro = libroConResena?.libro,
                     rating = resenaExistente?.rating ?: 0f,
                     texto = resenaExistente?.texto ?: "",
                     esFavorito = resenaExistente?.esFavorito ?: false,

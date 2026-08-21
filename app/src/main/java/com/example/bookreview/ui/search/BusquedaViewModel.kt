@@ -3,7 +3,7 @@ package com.example.bookreview.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bookreview.domain.model.Libro
-import com.example.bookreview.domain.repository.LibroRepository
+import com.example.bookreview.domain.usecase.BuscarLibrosConFavoritosUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,22 +18,21 @@ data class BusquedaUiState(
 )
 
 /**
- * Solo conoce LibroRepository (interfaz de dominio), no sabe si detrás hay
- * una lista mock o Retrofit. Por eso la próxima semana, cuando
- * LibroRepositoryImpl empiece a llamar a Open Library, esta clase no
- * necesita ningún cambio.
+ * No conoce LibroRepository ni ResenaRepository directamente: solo conoce
+ * BuscarLibrosConFavoritosUseCase, que es quien de verdad combina Open
+ * Library (remoto) con los favoritos guardados en Room (local). El
+ * ViewModel nunca hace esa combinación por su cuenta.
  */
 class BusquedaViewModel(
-    private val libroRepository: LibroRepository
+    private val buscarLibrosConFavoritosUseCase: BuscarLibrosConFavoritosUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BusquedaUiState())
     val uiState: StateFlow<BusquedaUiState> = _uiState.asStateFlow()
 
-    init {
-        // Carga inicial para no mostrar la pantalla vacía antes de escribir nada.
-        buscar()
-    }
+    // Ya no se dispara una búsqueda automática al entrar: con la API real
+    // una query vacía no tiene un "resultado por defecto" como sí lo tenía
+    // la lista mock de la Semana 1. La pantalla arranca invitando a escribir.
 
     fun onQueryChange(nuevoQuery: String) {
         _uiState.update { it.copy(query = nuevoQuery) }
@@ -42,7 +41,7 @@ class BusquedaViewModel(
     fun buscar() {
         viewModelScope.launch {
             _uiState.update { it.copy(cargando = true) }
-            val resultados = libroRepository.buscarLibros(_uiState.value.query)
+            val resultados = buscarLibrosConFavoritosUseCase(_uiState.value.query)
             _uiState.update { it.copy(resultados = resultados, cargando = false, yaBusco = true) }
         }
     }
