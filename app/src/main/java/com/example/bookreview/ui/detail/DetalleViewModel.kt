@@ -15,8 +15,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * Resultado de cargar el libro + la reseña existente. Sealed por la misma
+ * razón que [com.example.bookreview.ui.search.ResultadoBusqueda]: un
+ * `when` exhaustivo en la pantalla, no banderas sueltas.
+ */
+sealed interface DetalleCarga {
+    data object Cargando : DetalleCarga
+
+    /** libro puede ser null: ni Open Library ni Room tenían nada para este
+     *  id (caso de negocio válido, no un error). La pantalla igual deja
+     *  escribir una reseña. */
+    data class Exito(val libro: Libro?) : DetalleCarga
+    data class Error(val mensaje: String) : DetalleCarga
+}
+
 data class DetalleUiState(
-    val libro: Libro? = null,
+    val carga: DetalleCarga = DetalleCarga.Cargando,
     val rating: Float = 0f,
     val texto: String = "",
     val esFavorito: Boolean = false,
@@ -46,23 +61,35 @@ class DetalleViewModel(
         cargar()
     }
 
-    private fun cargar() {
+    // Pública (no privada como antes): la pantalla la vuelve a llamar
+    // desde el botón "Reintentar" cuando carga queda en Error.
+    fun cargar() {
         viewModelScope.launch {
+            _uiState.update { it.copy(carga = DetalleCarga.Cargando) }
             // Un solo llamado: el caso de uso es quien fue a buscar el libro
-            // (remoto) y la reseña existente (local, Room) y las combinó.
+            // (remoto) y la reseña existente (local, Room), las combinó, y
+            // ya atrapó cualquier excepción de red devolviendo un Result.
             // El ViewModel solo desempaqueta el resultado hacia el UiState.
-            val libroConResena = obtenerLibroConResenaUseCase(libroId)
-            val resenaExistente = libroConResena?.resena
-            _uiState.update {
-                it.copy(
-                    libro = libroConResena?.libro,
-                    rating = resenaExistente?.rating ?: 0f,
-                    texto = resenaExistente?.texto ?: "",
-                    esFavorito = resenaExistente?.esFavorito ?: false,
-                    fotoUri = resenaExistente?.fotoUri,
-                    yaTieneResena = resenaExistente != null
-                )
-            }
+            obtenerLibroConResenaUseCase(libroId).fold(
+                onSuccess = { libroConResena ->
+                    val resenaExistente = libroConResena?.resena
+                    _uiState.update {
+                        it.copy(
+                            carga = DetalleCarga.Exito(libroConResena?.libro),
+                            rating = resenaExistente?.rating ?: 0f,
+                            texto = resenaExistente?.texto ?: "",
+                            esFavorito = resenaExistente?.esFavorito ?: false,
+                            fotoUri = resenaExistente?.fotoUri,
+                            yaTieneResena = resenaExistente != null
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(carga = DetalleCarga.Error(error.message ?: "Ocurrió un error inesperado."))
+                    }
+                }
+            )
         }
     }
 
@@ -83,7 +110,7 @@ class DetalleViewModel(
 
     fun guardarResena() {
         val estado = _uiState.value
-        val libro = estado.libro ?: return
+        val libro = (estado.carga as? DetalleCarga.Exito)?.libro ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(guardando = true) }
             resenaRepository.guardarResena(

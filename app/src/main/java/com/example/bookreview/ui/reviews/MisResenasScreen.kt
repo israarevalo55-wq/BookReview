@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -101,10 +102,18 @@ private fun ResenaItem(
                 Text(resena.autor, style = MaterialTheme.typography.bodyMedium)
                 Text("★ ${resena.rating} / 5", style = MaterialTheme.typography.bodySmall)
             }
+            // Mismo color de "favorito" que en Búsqueda y Detalle
+            // (colorScheme.primary del Theme), para que el ícono se vea
+            // igual en toda la app.
             IconButton(onClick = onToggleFavorito) {
                 Icon(
                     if (resena.esFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Favorito"
+                    contentDescription = "Favorito",
+                    tint = if (resena.esFavorito) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        LocalContentColor.current
+                    }
                 )
             }
             IconButton(onClick = onEliminar) {

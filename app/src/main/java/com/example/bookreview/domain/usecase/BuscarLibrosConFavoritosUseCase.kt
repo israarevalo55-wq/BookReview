@@ -3,6 +3,7 @@ package com.example.bookreview.domain.usecase
 import com.example.bookreview.domain.model.Libro
 import com.example.bookreview.domain.repository.LibroRepository
 import com.example.bookreview.domain.repository.ResenaRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 /**
@@ -14,25 +15,40 @@ import kotlinx.coroutines.flow.first
  * Igual que [ObtenerLibroConResenaUseCase]: es el único lugar de la app
  * donde se combinan las dos fuentes para este propósito. BusquedaViewModel
  * solo ve la lista de [Libro] ya combinada.
+ *
+ * Devuelve [Result] en vez de lanzar la excepción tal cual: si
+ * [LibroRepository.buscarLibros] falla (sin conexión, timeout, error
+ * HTTP...), acá se atrapa y se traduce a un mensaje entendible ANTES de
+ * llegar al ViewModel. Sin esto, una excepción de red sin capturar
+ * terminaría crasheando la app (viewModelScope no la atrapa sola).
  */
 class BuscarLibrosConFavoritosUseCase(
     private val libroRepository: LibroRepository,
     private val resenaRepository: ResenaRepository
 ) {
-    suspend operator fun invoke(query: String): List<Libro> {
-        val resultados = libroRepository.buscarLibros(query)
-        if (resultados.isEmpty()) return resultados
+    suspend operator fun invoke(query: String): Result<List<Libro>> {
+        if (query.isBlank()) return Result.success(emptyList())
 
-        // Un solo vistazo a los favoritos guardados (no una colección en
-        // vivo): esta búsqueda ya es una operación puntual, igual que hace
-        // LibroRepository.buscarLibros(). .first() toma el valor actual del
-        // Flow que expone Room y sigue.
-        val idsFavoritos = resenaRepository.getFavoritos().first()
-            .map { it.libroId }
-            .toSet()
+        return try {
+            val resultados = libroRepository.buscarLibros(query)
 
-        return resultados.map { libro ->
-            libro.copy(esFavorito = libro.id in idsFavoritos)
+            // Un solo vistazo a los favoritos guardados (no una colección en
+            // vivo): esta búsqueda ya es una operación puntual, igual que hace
+            // LibroRepository.buscarLibros(). .first() toma el valor actual del
+            // Flow que expone Room y sigue.
+            val idsFavoritos = resenaRepository.getFavoritos().first()
+                .map { it.libroId }
+                .toSet()
+
+            Result.success(resultados.map { libro -> libro.copy(esFavorito = libro.id in idsFavoritos) })
+        } catch (e: CancellationException) {
+            // Nunca atrapar la cancelación de la propia corrutina (p.ej. si
+            // el usuario sale de la pantalla a mitad de la búsqueda):
+            // hay que dejarla seguir, si no se rompe la cancelación
+            // estructurada.
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception(e.aMensajeDeErrorAmigable(), e))
         }
     }
 }

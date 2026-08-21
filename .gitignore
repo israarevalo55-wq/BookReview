@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firma de release: la clave privada y sus contraseñas NUNCA van a git.
+# Ver docs/ARQUITECTURA.md / el mensaje de la Semana 5 para cómo regenerar
+# esto en otra máquina si hace falta.
+/keystore/
+keystore.properties

@@ -354,6 +354,100 @@ escribiendo tu reseña con normalidad."), sin crash, resto del formulario
 usable. Miniatura en Mis Reseñas confirmada visualmente, solo en la
 reseña que tiene foto.
 
+## Estados de carga/error y diseño consistente (Semana 5)
+
+### Por qué un sealed interface y no banderas sueltas
+
+Antes, `BusquedaUiState` tenía `cargando: Boolean` + `yaBusco: Boolean` +
+`resultados: List<Libro>` por separado — combinaciones como
+`cargando=true` y `resultados` con datos viejos eran posibles aunque no
+tuvieran sentido. Ahora cada pantalla tiene un sealed interface con un solo
+estado posible a la vez:
+
+```kotlin
+sealed interface ResultadoBusqueda {
+    data object Inicial : ResultadoBusqueda
+    data object Cargando : ResultadoBusqueda
+    data class Exito(val resultados: List<Libro>) : ResultadoBusqueda
+    data class Error(val mensaje: String) : ResultadoBusqueda
+}
+```
+
+(y su equivalente `DetalleCarga` en `DetalleViewModel`, con
+`Exito(val libro: Libro?)`). La pantalla resuelve qué mostrar con un
+`when` **exhaustivo** — si mañana se agrega un cuarto estado, el compilador
+avisa en cada `when` que falta cubrirlo.
+
+### Cómo se controla la excepción de red
+
+```
+BusquedaViewModel.buscar()
+  → buscarLibrosConFavoritosUseCase(query)     [domain/usecase]
+      → libroRepository.buscarLibros(query)     [Retrofit; puede lanzar
+                                                  IOException, etc.]
+      → try/catch acá: si falla, Result.failure(mensaje amigable)
+  ← ViewModel hace result.fold(onSuccess, onFailure) → Exito o Error
+```
+
+El `try/catch` vive en el **caso de uso** (`BuscarLibrosConFavoritosUseCase`,
+`ObtenerLibroConResenaUseCase`), no en el ViewModel ni en el repositorio.
+`domain/usecase/ErroresRed.kt` traduce la excepción a un mensaje
+("Sin conexión a internet...") **sin importar nada de Retrofit/OkHttp** —
+domain/ no necesita saber qué librería HTTP hay detrás, solo que
+`IOException` significa "no hay red". Se atrapa `CancellationException` y
+se vuelve a lanzar sin envolver: si no, cancelar la corrutina (por
+ejemplo, al salir de la pantalla a mitad de una búsqueda) se rompería.
+
+Sin este cambio, una excepción de red sin atrapar hubiera **crasheado la
+app** — `viewModelScope` no protege sola contra eso.
+
+### Diseño consistente: un componente compartido, no un `Text()` por pantalla
+
+`ui/common/EstadosUi.kt` tiene `IndicadorDeCarga()` y `MensajeDeError()`,
+usados por Búsqueda y Detalle. Así el spinner y el mensaje de error se ven
+**exactamente igual** en las dos pantallas, en vez de que cada una arme su
+propio layout.
+
+Revisando las 4 pantallas también apareció un color suelto real: el
+corazón de favorito en `BusquedaScreen` tenía `Color(0xFFE53935)`
+hardcodeado, mientras que el mismo ícono en `DetalleScreen` y
+`MisResenasScreen` no tenía tinte (color por defecto) — inconsistente
+entre pantallas. Las tres ahora usan `MaterialTheme.colorScheme.primary`
+cuando está marcado como favorito, y el color por defecto si no.
+
+### Verificado en vivo forzando un error real
+
+En el emulador: `adb shell svc wifi disable` + `adb shell svc data disable`
+(el emulador simula wifi y datos móviles por separado — hay que apagar los
+dos, no solo el wifi, porque si no la red "de respaldo" sigue activa).
+Buscar con la red apagada mostró el ícono, el mensaje "Sin conexión a
+internet. Verifica tu red e intenta de nuevo." y el botón "Reintentar",
+sin crash (confirmado también revisando que no apareciera nada en
+`logcat -b crash`). En logcat se vio la excepción real:
+`UnknownHostException: Unable to resolve host "openlibrary.org"`. Al
+reactivar la red y tocar "Reintentar", volvió a Cargando y después a
+Éxito con resultados reales.
+
+## Firma y despliegue (Semana 5)
+
+- **Keystore**: `keystore/bookreview-release.jks` (RSA 2048, válido ~27
+  años), generado con `keytool`. Alias `bookreview`.
+- **Credenciales**: `keystore.properties` en la raíz del proyecto, **fuera
+  de git** (ver `.gitignore`: `/keystore/` y `keystore.properties`).
+  `app/build.gradle.kts` lo lee con `java.util.Properties` y arma
+  `signingConfigs.release` solo si el archivo existe — así un build de
+  debug sigue funcionando en una máquina que clona el repo sin el
+  keystore.
+- **Comandos**: `./gradlew bundleRelease` → `.aab` firmado en
+  `app/build/outputs/bundle/release/app-release.aab`;
+  `./gradlew assembleRelease` → `.apk` firmado en
+  `app/build/outputs/apk/release/app-release.apk`. Ambos verificados
+  (`apksigner verify` / `jarsigner -verify`).
+- El equivalente en Android Studio es **Build → Generate Signed App
+  Bundle / APK**, que internamente pide los mismos datos (ruta del
+  keystore, alias, contraseñas) y termina llamando a las mismas tareas de
+  Gradle.
+
 ## Estado por semana
 
 - [x] **Semana 1** — estructura de capas, Room + DataStore reales, 4
@@ -369,5 +463,7 @@ reseña que tiene foto.
       `TakePicture`), `FileProvider`, preview en Detalle y miniatura en
       Mis Reseñas. Se encontraron y corrigieron dos bugs reales de
       pérdida de estado por muerte de proceso (permiso "solo esta vez").
-- [ ] **Próxima** (sin fecha aún) — estados visuales de carga/error
-      (Semana 5 según el cronograma original).
+- [x] **Semana 5** — sealed states de carga/error en Búsqueda y Detalle,
+      manejo controlado de excepciones de red en los casos de uso, diseño
+      consistente entre las 4 pantallas, y `.aab`/`.apk` firmados y
+      verificados. Proyecto listo para entregar.

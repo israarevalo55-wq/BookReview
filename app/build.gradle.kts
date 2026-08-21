@@ -1,7 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+// Firma de release (Semana 5). keystore.properties vive fuera de git (ver
+// .gitignore) y apunta al .jks generado con keytool. Se lee acá para no
+// tener contraseñas escritas en un archivo que sí se versiona. Si el
+// archivo no existe (por ejemplo, alguien más clona el repo sin él), el
+// build type "release" simplemente queda sin firmar en vez de romper el
+// build de debug.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+val hayKeystoreConfigurado = keystorePropertiesFile.exists()
+if (hayKeystoreConfigurado) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
 android {
@@ -20,6 +35,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hayKeystoreConfigurado) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -27,6 +53,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hayKeystoreConfigurado) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
